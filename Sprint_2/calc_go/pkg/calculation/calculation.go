@@ -359,9 +359,6 @@ func tokenizeandCalc(Expression string) (float64, error) {
 				for {
 					if (operatorsslice[len(operatorsslice)-1]) == isLeftParenthesis {
 						_, operatorsslice, _ = popOp(operatorsslice)
-						break
-					}
-					result, numsslice, operatorsslice, matherr = transact(numsslice, operatorsslice, 0, false)
 					if result == 0 && matherr != nil {
 						return 0, matherr
 
