@@ -3,7 +3,8 @@ package application
 import (
 	"encoding/json"
 	"errors"
-	//"log"
+	"log"
+
 	"net/http"
 	"os"
 	"strconv"
@@ -55,7 +56,6 @@ func ConfigFromEnv() *Config {
 
 func NewOrchestrator() *Orchestrator {
 	return &Orchestrator{
-		//taskQueue: make([]Task, 0),
 		Config: ConfigFromEnv(),
 	}
 }
@@ -85,20 +85,24 @@ type Task struct {
 	Operation_time int     `json:"operation_time,omitempty"`
 }
 
+type abc struct {
+	Atomic Task // Arg1 = A.Result, arg2 = B.result, Operator = Operator
+	A Task // Atomic
+	B Task // Atomic и так до простейсшего действия
+	Operator string
+}
+
 type Orchestrator struct {
-	mu            sync.Mutex
-	//exprStore     map[string]Expression
-	exprID        int
-	//taskStore     []map[string]Task
+	mu sync.Mutex
+	exprID int
 	currentTaskID int
-	//taskQueue     []Task
-	Config *Config
+	Config        *Config
 }
 
 var (
-	calc TCalc
+	calc      TCalc
 	exprStore = make(map[string]Expression)
-	taskStore = make([]map[string]Task, 0)
+	taskStore = make([]Task, 0)
 )
 
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
@@ -152,19 +156,20 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 	o.exprID++
 	ID := strconv.Itoa(o.exprID)
 	expr = Expression{
-		ID:     strconv.Itoa(o.exprID),
+		ID:     ID,
 		Expr:   request.Expression,
 		Status: "pending",
 	}
-
-	tasks, err := calc.ExprtolightExprs(request.Expression, ID)
+//
+//
+// 1
+	tasks, err := calc.ExprtolightExprs(request.Expression, ID, "None")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	taskStore = tasks
-	//log.Println(request.Expression, o.taskStore, tasks)
 
 	exprStore[ID] = expr
 	w.WriteHeader(http.StatusCreated)
@@ -194,10 +199,16 @@ func (o *Orchestrator) GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	task := taskStore[o.currentTaskID]
+
+	expr := exprStore[task.ExprID]
+	expr.Status = "processing"
+	exprStore[task.ExprID] = expr
+
 	o.currentTaskID++
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
+	defer r.Body.Close()
 
 }
 
@@ -212,10 +223,11 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	var result struct {
-		ID     string  `json:"id"`
-		Result float64 `json:"result"`
+	type Result struct {
+		ID     string  `json:"ID,omitempty"`
+		Result float64 `json:"result,omitempty"`
 	}
+	var result Result
 
 	if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 		http.Error(w, "Invalid data", http.StatusUnprocessableEntity)
@@ -224,20 +236,75 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	expr, exists := exprStore[result.ID]
 	if !exists {
-	    http.Error(w, "Expression not found", http.StatusNotFound)
-	    return
+		http.Error(w, "Expression not found", http.StatusNotFound)
+		return
 	}
 	
+	ID, err := strconv.Atoi(result.ID)
+	if err != nil {
+		log.Printf("Error of type conversion %v", err)
+	}
+
+	expression := exprStore[taskStore[ID].ExprID].Expr
+	arg1 := taskStore[ID].Arg1
+	arg2 := taskStore[ID].Arg2
+	op := taskStore[ID].Operation
+
+	atomicExpr, err := makeAnAtomicExpr(op, arg1, arg2)
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
+
+	taskStore, err = calc.ExprtolightExprs(expression, taskStore[ID].ExprID, atomicExpr)
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
+
 	expr.Result = result.Result
 	expr.Status = "done"
-	exprStore[result.ID] = expr
-	
-	w.WriteHeader(http.StatusOK)}
+	exprStore[taskStore[ID].ExprID] = expr
+
+	log.Println(exprStore)
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(result)
+}
+
+func makeAnAtomicExpr(Operation string, Arg1, Arg2 float64) (string, error) {
+	arg1 := strconv.FormatFloat(Arg1, 'g', 8, 32)
+	arg2 := strconv.FormatFloat(Arg2, 'g', 8, 32)
+
+	var result string
+
+	switch {
+	case Operation == "+":
+		result = arg1 + "+" + arg2
+	case Operation == "-":
+		result = arg1 + "-" + arg2
+	case Operation == "*":
+		result = arg1 + "*" + arg2
+	case Operation == "/":
+		if arg2 == "0" {
+			return "0", errorStore.DvsByZeroErr //DvsByZeroErr
+		}
+		result = arg1 + "/" + arg2
+	}
+	return result, nil
+}
 
 func (o *Orchestrator) RunOrchestrator() error {
 	a := NewAgent() // Инициализация агента
 	if a == nil {
 		return errors.New("failed to initialize agent")
+	}
+
+	computingPower, _ := strconv.Atoi(os.Getenv("COMPUTING_POWER"))
+	if computingPower == 0 {
+		computingPower = 1
+	}
+	for i := 0; i < computingPower; i++ {
+		log.Printf("Starting worker %d", i)
+		go a.worker()
 	}
 
 	mux := http.NewServeMux()
@@ -250,13 +317,16 @@ func (o *Orchestrator) RunOrchestrator() error {
 	mux.HandleFunc("/internal/task", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			o.GetTaskHandler(w, r)
+
 		} else if r.Method == http.MethodPost {
 			o.PostTaskHandler(w, r)
+
 		} else {
 			http.Error(w, `Wrong method, expected: "GET" or "POST"`, http.StatusMethodNotAllowed)
 			return
 		}
 	})
+
 	http.Handle("/", mux)
 	return http.ListenAndServe(":"+o.Config.Addr, nil)
 

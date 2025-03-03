@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
+
 )
+
 
 
 type DCalc struct {
@@ -86,12 +88,12 @@ func getPryority(operator int) int {
 	return pryority
 }
 
-func extractNum(Expression string, indexofnum int, sliceofnums []float64, negative bool) ([]float64, int, error) {
+func extractNum(Expression string, indexofnum int, sliceofnums []string, negative bool) ([]string, int, error) {
 	var d DCalc
 	var num string
 	var index int
 	var length int = len(Expression)
-	var numfloat64 float64
+	var numstring string
 	var converr error
 
 	for nextnotnumindex := indexofnum; nextnotnumindex < length; nextnotnumindex++ {
@@ -99,40 +101,40 @@ func extractNum(Expression string, indexofnum int, sliceofnums []float64, negati
 			num += string(Expression[nextnotnumindex])
 		}
 		if !d.IsNumber(Expression[nextnotnumindex]) && d.IsSeparator(Expression[nextnotnumindex]) == 0 {
-			numfloat64, converr = strconv.ParseFloat(num, 64)
-			if numfloat64 == 0 && converr != nil {
+			numstring, converr = strconv.ParseFloat(num, 64)
+			if numstring == 0 && converr != nil {
 				return nil, indexofnum, converr
 			}
 			if negative && d.IsParenthesis(Expression[nextnotnumindex]) != isRightParenthesis {
-				numfloat64 = -numfloat64
+				numstring = -numstring
 			} else if negative && d.IsParenthesis(Expression[nextnotnumindex]) == isRightParenthesis {
-				numfloat64 = -numfloat64
+				numstring = -numstring
 				nextnotnumindex += 1
 			}
-			sliceofnums = append(sliceofnums, numfloat64)
+			sliceofnums = append(sliceofnums, numstring)
 			return sliceofnums, nextnotnumindex, nil
 		}
 		index = nextnotnumindex
 	}
 
-	numfloat64, converr = strconv.ParseFloat(num, 64)
-	if numfloat64 == 0 && converr != nil {
+	numstring, converr = strconv.ParseFloat(num, 64)
+	if numstring == 0 && converr != nil {
 		return nil, indexofnum, converr
 	}
 	if negative && d.IsParenthesis(Expression[index]) != isRightParenthesis {
-		numfloat64 = -numfloat64
+		numstring = -numstring
 	} else if negative && d.IsParenthesis(Expression[index]) == isRightParenthesis {
-		numfloat64 = -numfloat64
+		numstring = -numstring
 		index += 1
 	}
-	sliceofnums = append(sliceofnums, numfloat64)
+	sliceofnums = append(sliceofnums, numstring)
 
 	return sliceofnums, index, nil
 }
 
-func popNum(sliceofnums []float64, numtopop int) ([]float64, []float64, error) {
+func popNum(sliceofnums []string, numtopop int) ([]string, []string, error) {
 
-	var poppednum, newsliceofnums []float64
+	var poppednum, newsliceofnums []string
 
 	if numtopop > len(sliceofnums) {
 		return poppednum, sliceofnums,  errorStore.NumToPopMErr // NumToPopMErr
@@ -161,43 +163,42 @@ func popOp(opslice []int) (int, []int, error) {
 	return poppedop, newopslice, nil
 }
 
-func (s *TCalc) GetLightExpressions(exprID string, sliceofnums []float64, opslice []int, prioritynum int, operator int, addop bool) (map[string]Task, []float64, []int, error) {
+func (s *TCalc) GetLightExpressions(resultOfTask, exprID string, sliceofnums []string, opslice []int, prioritynum int, operator int, addop bool) (Task, []string, []int, error) {
 	var (
 		poppedop            int
-		poppednums          []float64
+		poppednums          []string
 		popnumerr, popoperr error
+		lightexprs Task
 	)
-	lightexprs := make(map[string]Task)
 	poppedop, opslice, popoperr = popOp(opslice)
 	poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
 
 	if poppedop == 0 && popoperr != nil {
-		return map[string]Task{}, sliceofnums, opslice, popoperr
+		return Task{}, sliceofnums, opslice, popoperr
 	}
 
 	if poppednums == nil && popnumerr != nil {
-		return map[string]Task{}, sliceofnums, opslice, popnumerr
+		return Task{}, sliceofnums, opslice, popnumerr
 	}
 
+	fnum, _ := strconv.ParseFloat(poppednums[0], 32)
+	snum, _ := strconv.ParseFloat(poppednums[1], 32)
 	ID := strconv.Itoa(prioritynum)
 
 	switch {
 	case poppedop == isAddition:
-		fnum := poppednums[0]
-		snum := poppednums[1]
-		lightexprs[ID] = Task{
+		
+		lightexprs = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "+",
-			Operation_time: ConfigFromEnv().TimeAddition,
+			Operation_time:  ConfigFromEnv().TimeAddition,
 		}
 
 	case poppedop == isSubtraction:
-		fnum := poppednums[0]
-		snum := poppednums[1]
-		lightexprs[ID] = Task{
+		lightexprs = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
@@ -206,30 +207,30 @@ func (s *TCalc) GetLightExpressions(exprID string, sliceofnums []float64, opslic
 			Operation_time:  ConfigFromEnv().TimeSubtraction,
 		}
 	case poppedop == isMultiplication:
-		fnum := poppednums[0]
-		snum := poppednums[1]
-		lightexprs[ID] = Task{
+		lightexprs = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "*",
-			Operation_time:  ConfigFromEnv().TimeMultiplications,
+			Operation_time:   ConfigFromEnv().TimeMultiplications,
 		}
 
 	case poppedop == isDivision:
-		if poppednums[1] == 0 {
-			return map[string]Task{}, sliceofnums, opslice,  errorStore.DvsByZeroErr //DvsByZeroErr
+		if snum == 0 {
+			return Task{}, sliceofnums, opslice,  errorStore.DvsByZeroErr //DvsByZeroErr
 		}
-		fnum := poppednums[0]
-		snum := poppednums[1]
-		lightexprs[ID] =  Task{
+		lightexprs = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "/",
 			Operation_time:  ConfigFromEnv().TimeDivisions,
+		}
+
+		if resultOfTask != "None" {
+			sliceofnums = append(sliceofnums, resultOfTask)
 		}
 
 		if addop {
@@ -247,7 +248,7 @@ func transact(sliceofnums []float64, opslice []int, operator int, addop bool) (f
 	var popnumerr, popoperr error
 
 	poppedop, opslice, popoperr = popOp(opslice)
-	poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
+	//poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
 
 	if poppedop == 0 && popoperr != nil {
 		return 0, sliceofnums, opslice, popoperr
@@ -475,15 +476,15 @@ func tokenizeandCalc(Expression string) (float64, error) {
 	return numsslice[0], nil
 }
 
-func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]map[string]Task, error) { // Функция разбивает выражение на подвыражения
+func (s *TCalc) ExprtolightExprs(Expression, exprID, atomicExprResult string) ([]Task, error) { // Функция разбивает выражение на подвыражения
 	var d DCalc
 	var exprpryority int
-	var result map[string]Task
+	var result Task
 	var operatorsslice []int
-	var numsslice []float64
+	var numsslice []string
 	var priority, countdown int
 	var matherr, numconverr error
-	var realresult []map[string]Task
+	var total []Task
 
 	Expression = strings.ReplaceAll(Expression, " ", "")
 
@@ -518,9 +519,9 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]map[string]Task, 
 					priority = getPryority(d.IsOperator(Expression[indexoftokenizer]))
 					if getPryority(operatorsslice[operatorslicelength-1]) == priority {
 						exprpryority++
-						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
-						realresult = append(realresult, result)
-						if result == nil && matherr != nil {
+						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(atomicExprResult, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
+						total = append(total, result)
+						if matherr != nil {
 							return nil, matherr
 
 						}
@@ -528,9 +529,9 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]map[string]Task, 
 						operatorsslice = append(operatorsslice, d.IsOperator(Expression[indexoftokenizer]))
 					} else if getPryority(operatorsslice[operatorslicelength-1]) > priority {
 						exprpryority++
-						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
-						realresult = append(realresult, result)
-						if result == nil && matherr != nil {
+						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(atomicExprResult, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
+						total = append(total, result)
+						if matherr != nil {
 							return nil, matherr
 
 						}
@@ -548,9 +549,9 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]map[string]Task, 
 						break
 					}
 					exprpryority++
-					result, numsslice, operatorsslice, matherr = s.GetLightExpressions(exprID, numsslice, operatorsslice, exprpryority, 0, false)
-					realresult = append(realresult, result)
-					if result == nil && matherr != nil {
+					result, numsslice, operatorsslice, matherr = s.GetLightExpressions(atomicExprResult, exprID, numsslice, operatorsslice, exprpryority, 0, false)
+					total = append(total, result)
+					if matherr != nil {
 						return nil, matherr
 
 					}
@@ -565,16 +566,16 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]map[string]Task, 
 			break
 		} else {
 			exprpryority++
-			result, numsslice, operatorsslice, matherr = s.GetLightExpressions(exprID, numsslice, operatorsslice, exprpryority, 0, false)
-			realresult = append(realresult, result)
-			if result == nil && matherr != nil {
+			result, numsslice, operatorsslice, matherr = s.GetLightExpressions(atomicExprResult, exprID, numsslice, operatorsslice, exprpryority, 0, false)
+			total = append(total, result)
+			if matherr != nil {
 				return nil, matherr
 
 			}
 		}
 		countdown--
 	}
-	return realresult, nil
+	return total, nil
 }
 
 func (s TCalc) Init() TCalc {

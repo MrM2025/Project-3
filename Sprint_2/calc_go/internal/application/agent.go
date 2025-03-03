@@ -3,19 +3,30 @@ package application
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	//"io"
+
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
 )
+
+type AgentTask struct {
+	ID             string  `json:"id,omitempty"`
+	ExprID         string  `json:"expression,omitempty"`
+	Arg1           float64 `json:"arg1,omitempty"`
+	Arg2           float64 `json:"arg2,omitempty"`
+	Operation      string  `json:"operation,omitempty"`
+	Operation_time int     `json:"operation_time,omitempty"`
+}
 
 type AgentResJSON struct {
 	ID     string  `json:"ID,omitempty"`
 	Result float64 `json:"result,omitempty"`
-	Error  string  `json:"error,omitempty"`
 }
 
 type Agent struct {
@@ -54,33 +65,26 @@ func (a *Agent) worker() {
 
 		res, err := a.client.Do(req)
 		if err != nil {
-			log.Printf("Error fetching task: %v. Retrying in 2 seconds...", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		defer res.Body.Close()  
-
-		if res.StatusCode != http.StatusOK {
-			log.Printf("Unexpected status code: %d. Retrying...", res.StatusCode)
+			log.Printf("Error doing request: %v. Retrying in 2 seconds...", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		request := new(Task)
+		request := new(AgentTask)
 		dec := json.NewDecoder(res.Body) //Достаем подвыражение из res
 		dec.DisallowUnknownFields()
 		derr := dec.Decode(&request)
 		if derr != nil {
-			log.Printf("Error fetching task: %v. Retrying in 2 seconds...", derr)
-			time.Sleep(2 * time.Second)
+			log.Printf("Error decoding task: %v.", derr)
+			time.Sleep(3 * time.Second)
 			continue
 		}
+		res.Body.Close()
 
 		calcresult, cerr := calculator(request.Operation, request.Arg1, request.Arg2, request.Operation_time) //Производим вычисления
 		if cerr != nil {
-			log.Printf("Error fetching task: %v. Retrying in 2 seconds...", cerr)
-			time.Sleep(2 * time.Second)
-			continue
+			log.Printf("Calculator error: %v.", cerr)
+			return
 		}
 
 		result := AgentResJSON{
@@ -94,16 +98,16 @@ func (a *Agent) worker() {
 			return
 		}
 
-		req, err = http.NewRequest("POST", a.OrchestratorURL+"/internal/task", bytes.NewReader(body))
-		req.Body.Close()
+		a.SendResult(request, body)
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
 func calculator(operator string, arg1, arg2 float64, operation_time int) (float64, error) {
 	time.Sleep(time.Duration(operation_time) * time.Millisecond)
 	var result float64
+
 	switch {
 	case operator == "+":
 		result = arg1 + arg2
@@ -116,9 +120,43 @@ func calculator(operator string, arg1, arg2 float64, operation_time int) (float6
 			return 0, errorStore.DvsByZeroErr
 		}
 		result = arg1 / arg2
+	default:
+		return 0, fmt.Errorf("Error")
 	}
 
 	return result, nil
+}
+
+func (a *Agent) SendResult(request *AgentTask, result []byte) {
+
+	_, err := strconv.Atoi(request.ID)
+	if err != nil {
+		log.Printf("Error of type conversion %v", err)
+	}
+
+	req, err := http.NewRequest("POST", a.OrchestratorURL+"/internal/task", bytes.NewReader(result))
+	if err != nil {
+		log.Printf("Error fetching task: %v. Retrying in 2 seconds...", err)
+		time.Sleep(2 * time.Second)
+
+	}
+
+	_, err = a.client.Do(req)
+	if err != nil {
+		log.Printf("Error doing request: %v. Retrying in 2 seconds...", err)
+
+	}
+/*
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		log.Printf("Worker : error response posting result for task %v: %s", taskStore[ID-1], string(body))
+	} else {
+		log.Printf("Worker : successfully completed task %v with result %s", taskStore[ID-1], result)
+	}
+	*/
+
+	defer req.Body.Close()
+
 }
 
 func (a *Agent) RunAgent() {
