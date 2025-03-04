@@ -15,26 +15,26 @@ func TestCalculations(t *testing.T) {
 		{
 			name:      "Addition positive numbers",
 			operation: "+",
-			arg1:         2.5,
+			arg1:         25.0,
 			arg2:         3.5,
-			expected:  6.0,
+			expected:  28.5,
 			expectErr: false,
 		},
 		{
 			name:      "Addition negative numbers",
 			operation: "+",
-			arg1:         -2.5,
+			arg1:         2.5,
 			arg2:         -3.5,
-			expected:  -6.0,
+			expected:  -1.0,
 			expectErr: false,
 		},
 
 		{
 			name:      "Subtraction positive numbers",
 			operation: "-",
-			arg1:         5.0,
-			arg2:         2.5,
-			expected:  2.5,
+			arg1:         -2.0,
+			arg2:         2.0,
+			expected:  -4,
 			expectErr: false,
 		},
 		{
@@ -57,7 +57,7 @@ func TestCalculations(t *testing.T) {
 		{
 			name:      "Multiplication by zero",
 			operation: "*",
-			arg1:         2.0,
+			arg1:         1.0,
 			arg2:         0.0,
 			expected:  0.0,
 			expectErr: false,
@@ -74,7 +74,7 @@ func TestCalculations(t *testing.T) {
 		{
 			name:      "Division by zero",
 			operation: "/",
-			arg1:         6.0,
+			arg1:         5.0,
 			arg2:         0.0,
 			expected:  0.0,
 			expectErr: true,

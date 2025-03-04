@@ -57,6 +57,7 @@ func (a *Agent) worker() {
 		log.Fatal("HTTP client is not initialized")
 	}
 	for {
+		log.Println(3)
 		req, err := http.NewRequest("GET", a.OrchestratorURL+"/internal/task", nil)
 		if err != nil {
 			log.Printf("Error creating request: %v", err)
@@ -71,6 +72,8 @@ func (a *Agent) worker() {
 			continue
 		}
 
+		log.Println(4)
+
 		request := new(AgentTask)
 		dec := json.NewDecoder(res.Body) //Достаем подвыражение из res
 		dec.DisallowUnknownFields()
@@ -81,6 +84,8 @@ func (a *Agent) worker() {
 			continue
 		}
 		res.Body.Close()
+
+		//log.Println("a", request.Arg1, request.Arg2)
 
 		calcresult, cerr := calculator(request.Operation, request.Arg1, request.Arg2, request.Operation_time) //Производим вычисления
 		if cerr != nil {
@@ -98,16 +103,19 @@ func (a *Agent) worker() {
 			log.Printf("Error marshaling result: %v.", err)
 			return
 		}
+		log.Println(4)
 
 		a.SendResult(request, body)
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 }
 
 func calculator(operator string, arg1, arg2 float64, operation_time int) (float64, error) {
 	time.Sleep(time.Duration(operation_time) * time.Millisecond)
 	var result float64
+
+	log.Println("c", operator, arg1, arg2)
 
 	switch {
 	case operator == "+":
@@ -147,7 +155,7 @@ func (a *Agent) SendResult(request *AgentTask, result []byte) {
 		log.Printf("Error doing request: %v. Retrying in 2 seconds...", err)
 
 	}
-/*
+	/*
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
 		log.Printf("Worker : error response posting result for task %v: %s", taskStore[ID-1], string(body))

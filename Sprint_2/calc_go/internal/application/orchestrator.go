@@ -85,20 +85,20 @@ type Task struct {
 	Arg2           float64 `json:"arg2,omitempty"`
 	Operation      string  `json:"operation,omitempty"`
 	Operation_time int     `json:"operation_time,omitempty"`
-	Result         float64 `json:"result,omitempty"`
+	Result         string  `json:"result,omitempty"`
 }
 
 type Orchestrator struct {
-	mu            sync.Mutex
-	exprID        int
-	currentTaskID int
-	Config        *Config
+	mu     sync.Mutex
+	exprID int
+	Config *Config
 }
 
 var (
-	calc      TCalc
-	exprStore = make(map[string]Expression)
-	taskStore = make([]Task, 0)
+	calc          TCalc
+	exprStore         = make(map[string]Expression)
+	taskStore         = make([]Task, 0)
+	currentTaskID int = 0
 )
 
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
@@ -159,14 +159,15 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 	//
 	//
 	// 1
-	tasks, err := calc.ExprtolightExprs(request.Expression, ID, "None")
+	tasks, err := calc.ExprtolightExprs(request.Expression, ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Println()
 
 	taskStore = tasks
+
+	//log.Println("before", taskStore)
 
 	exprStore[ID] = expr
 	w.WriteHeader(http.StatusCreated)
@@ -190,22 +191,32 @@ func (o *Orchestrator) GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if o.currentTaskID >= len(taskStore) {
+	if currentTaskID >= len(taskStore) {
 		http.Error(w, "No tasks available", http.StatusNotFound)
 		return
 	}
 
-	task := taskStore[o.currentTaskID]
+	task := taskStore[currentTaskID]
+
+	if task.Result != "" {
+		return
+	}
 
 	expr := exprStore[task.ExprID]
 	expr.Status = "processing"
 	exprStore[task.ExprID] = expr
 
-	o.currentTaskID++
+	if currentTaskID == len(taskStore) {
+		log.Println("end of taskStore")
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
+	log.Println("got task to solve", task)
+
 	defer r.Body.Close()
+	currentTaskID++
 
 }
 
@@ -231,39 +242,45 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expr, exists := exprStore[result.ID]
+	ID, err := strconv.Atoi(result.ID)
+
+	expr, exists := exprStore[taskStore[ID].ExprID]
 	if !exists {
 		http.Error(w, "Expression not found", http.StatusNotFound)
 		return
 	}
 
-	ID, err := strconv.Atoi(result.ID)
 	if err != nil {
 		log.Printf("Error of type conversion %v", err)
 	}
 
-	taskStore[ID].Result = result.Result
+	res := strconv.FormatFloat(result.Result, 'g', 8, 8)
 
-	expression := exprStore[taskStore[ID].ExprID].Expr
-	arg1 := taskStore[ID].Arg1
-	arg2 := taskStore[ID].Arg2
-	op := taskStore[ID].Operation
+	taskStore[ID].Result = res
 
-	atomicExpr, err := makeAnAtomicExpr(op, arg1, arg2)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
+	//expression := exprStore[taskStore[ID].ExprID].Expr
+	//arg1 := taskStore[ID].Arg1
+	//arg2 := taskStore[ID].Arg2
+	//op := taskStore[ID].Operation
 
-	taskStore, err = calc.ExprtolightExprs(expression, taskStore[ID].ExprID, atomicExpr)
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
+	/*
+		atomicExpr, err := makeAnAtomicExpr(op, arg1, arg2)
+		if err != nil {
+			log.Printf("Error: %v", err)
+		}
 
-	expr.Result = result.Result
+
+		log.Println(888, taskStore)
+		taskStore, err = calc.ExprtolightExprs(expression, taskStore[ID].ExprID, )
+		if err != nil {
+			log.Printf("Error: %v", err)
+		}
+	*/
+
 	expr.Status = "done"
 	exprStore[taskStore[ID].ExprID] = expr
 
-	log.Println(exprStore)
+	log.Println(taskStore)
 	w.WriteHeader(http.StatusOK)
 
 	json.NewEncoder(w).Encode(result)
@@ -316,9 +333,11 @@ func (o *Orchestrator) RunOrchestrator() error {
 	mux.HandleFunc("/internal/task", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			o.GetTaskHandler(w, r)
+			log.Println(1)
 
 		} else if r.Method == http.MethodPost {
 			o.PostTaskHandler(w, r)
+			log.Println(2)
 
 		} else {
 			http.Error(w, `Wrong method, expected: "GET" or "POST"`, http.StatusMethodNotAllowed)
