@@ -79,22 +79,18 @@ type Expression struct {
 type Task struct {
 	ID             string  `json:"id,omitempty"`
 	ExprID         string  `json:"expression,omitempty"`
+	IDArg1         string  `json:"idarg1,omitempty"`
 	Arg1           float64 `json:"arg1,omitempty"`
+	IDArg2         string  `json:"idarg2,omitempty"`
 	Arg2           float64 `json:"arg2,omitempty"`
 	Operation      string  `json:"operation,omitempty"`
 	Operation_time int     `json:"operation_time,omitempty"`
-}
-
-type abc struct {
-	Atomic Task // Arg1 = A.Result, arg2 = B.result, Operator = Operator
-	A Task // Atomic
-	B Task // Atomic и так до простейсшего действия
-	Operator string
+	Result         float64 `json:"result,omitempty"`
 }
 
 type Orchestrator struct {
-	mu sync.Mutex
-	exprID int
+	mu            sync.Mutex
+	exprID        int
 	currentTaskID int
 	Config        *Config
 }
@@ -160,14 +156,15 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		Expr:   request.Expression,
 		Status: "pending",
 	}
-//
-//
-// 1
+	//
+	//
+	// 1
 	tasks, err := calc.ExprtolightExprs(request.Expression, ID, "None")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Println()
 
 	taskStore = tasks
 
@@ -239,11 +236,13 @@ func (o *Orchestrator) PostTaskHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Expression not found", http.StatusNotFound)
 		return
 	}
-	
+
 	ID, err := strconv.Atoi(result.ID)
 	if err != nil {
 		log.Printf("Error of type conversion %v", err)
 	}
+
+	taskStore[ID].Result = result.Result
 
 	expression := exprStore[taskStore[ID].ExprID].Expr
 	arg1 := taskStore[ID].Arg1

@@ -7,10 +7,7 @@ import (
 	"time"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
-
 )
-
-
 
 type DCalc struct {
 }
@@ -93,41 +90,33 @@ func extractNum(Expression string, indexofnum int, sliceofnums []string, negativ
 	var num string
 	var index int
 	var length int = len(Expression)
-	var numstring string
-	var converr error
 
 	for nextnotnumindex := indexofnum; nextnotnumindex < length; nextnotnumindex++ {
 		if d.IsNumber(Expression[nextnotnumindex]) || d.IsSeparator(Expression[nextnotnumindex]) != 0 {
 			num += string(Expression[nextnotnumindex])
 		}
 		if !d.IsNumber(Expression[nextnotnumindex]) && d.IsSeparator(Expression[nextnotnumindex]) == 0 {
-			numstring, converr = strconv.ParseFloat(num, 64)
-			if numstring == 0 && converr != nil {
-				return nil, indexofnum, converr
-			}
+			sliceofnums = append(sliceofnums, num)
 			if negative && d.IsParenthesis(Expression[nextnotnumindex]) != isRightParenthesis {
-				numstring = -numstring
+				num = "-" + num
 			} else if negative && d.IsParenthesis(Expression[nextnotnumindex]) == isRightParenthesis {
-				numstring = -numstring
+				num = "-" + num
 				nextnotnumindex += 1
 			}
-			sliceofnums = append(sliceofnums, numstring)
+			sliceofnums = append(sliceofnums, num)
 			return sliceofnums, nextnotnumindex, nil
 		}
 		index = nextnotnumindex
 	}
 
-	numstring, converr = strconv.ParseFloat(num, 64)
-	if numstring == 0 && converr != nil {
-		return nil, indexofnum, converr
-	}
+	sliceofnums = append(sliceofnums, num)
 	if negative && d.IsParenthesis(Expression[index]) != isRightParenthesis {
-		numstring = -numstring
+		num = "-" + num
 	} else if negative && d.IsParenthesis(Expression[index]) == isRightParenthesis {
-		numstring = -numstring
+		num = "-" + num
 		index += 1
 	}
-	sliceofnums = append(sliceofnums, numstring)
+	sliceofnums = append(sliceofnums, num)
 
 	return sliceofnums, index, nil
 }
@@ -137,10 +126,10 @@ func popNum(sliceofnums []string, numtopop int) ([]string, []string, error) {
 	var poppednum, newsliceofnums []string
 
 	if numtopop > len(sliceofnums) {
-		return poppednum, sliceofnums,  errorStore.NumToPopMErr // NumToPopMErr
+		return poppednum, sliceofnums, errorStore.NumToPopMErr // NumToPopMErr
 	}
 	if numtopop <= 0 {
-		return poppednum, sliceofnums,  errorStore.NumToPopMErr // NumToPopZeroErr
+		return poppednum, sliceofnums, errorStore.NumToPopMErr // NumToPopZeroErr
 	}
 
 	poppednum = append(sliceofnums[len(sliceofnums)-numtopop:])
@@ -154,7 +143,7 @@ func popOp(opslice []int) (int, []int, error) {
 	var newopslice []int
 
 	if len(opslice) == 0 {
-		return 0, opslice,  errorStore.NthToPopErr // NthToPopErr
+		return 0, opslice, errorStore.NthToPopErr // NthToPopErr
 	}
 
 	poppedop := opslice[len(opslice)-1]
@@ -168,8 +157,9 @@ func (s *TCalc) GetLightExpressions(resultOfTask, exprID string, sliceofnums []s
 		poppedop            int
 		poppednums          []string
 		popnumerr, popoperr error
-		lightexprs Task
+		lightexpr           Task
 	)
+
 	poppedop, opslice, popoperr = popOp(opslice)
 	poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
 
@@ -187,59 +177,57 @@ func (s *TCalc) GetLightExpressions(resultOfTask, exprID string, sliceofnums []s
 
 	switch {
 	case poppedop == isAddition:
-		
-		lightexprs = Task{
+
+		lightexpr = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "+",
-			Operation_time:  ConfigFromEnv().TimeAddition,
+			Operation_time: ConfigFromEnv().TimeAddition,
 		}
 
 	case poppedop == isSubtraction:
-		lightexprs = Task{
+		lightexpr = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "-",
-			Operation_time:  ConfigFromEnv().TimeSubtraction,
+			Operation_time: ConfigFromEnv().TimeSubtraction,
 		}
 	case poppedop == isMultiplication:
-		lightexprs = Task{
+		lightexpr = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "*",
-			Operation_time:   ConfigFromEnv().TimeMultiplications,
+			Operation_time: ConfigFromEnv().TimeMultiplications,
 		}
 
 	case poppedop == isDivision:
 		if snum == 0 {
-			return Task{}, sliceofnums, opslice,  errorStore.DvsByZeroErr //DvsByZeroErr
+			return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
 		}
-		lightexprs = Task{
+		lightexpr = Task{
 			ID:             ID,
 			ExprID:         exprID,
 			Arg1:           fnum,
 			Arg2:           snum,
 			Operation:      "/",
-			Operation_time:  ConfigFromEnv().TimeDivisions,
+			Operation_time: ConfigFromEnv().TimeDivisions,
 		}
-
-		if resultOfTask != "None" {
-			sliceofnums = append(sliceofnums, resultOfTask)
-		}
+		
+		sliceofnums = append(sliceofnums, resultOfTask)
 
 		if addop {
 			opslice = append(opslice, operator)
 		}
 	}
-			return lightexprs, sliceofnums, opslice, nil
-	}
 
+	return lightexpr, sliceofnums, opslice, nil
+}
 
 func transact(sliceofnums []float64, opslice []int, operator int, addop bool) (float64, []float64, []int, error) {
 	var result float64
@@ -267,7 +255,7 @@ func transact(sliceofnums []float64, opslice []int, operator int, addop bool) (f
 		result = poppednums[0] * poppednums[1]
 	case poppedop == isDivision:
 		if poppednums[1] == 0 {
-			return 0, sliceofnums, opslice,  errorStore.DvsByZeroErr //DvsByZeroErr
+			return 0, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
 		}
 		result = poppednums[0] / poppednums[1]
 	}
@@ -285,11 +273,11 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 	var errorstring string
 
 	if Expression == "" {
-		return false,  errorStore.EmptyExpressionErr //Пустое выражение
+		return false, errorStore.EmptyExpressionErr //Пустое выражение
 	}
 
-	if  errorStore.IncorrectExpressionErr.Error() != "incorrect expression" {
-		 errorStore.IncorrectExpressionErr = fmt.Errorf(`incorrect expression`)
+	if errorStore.IncorrectExpressionErr.Error() != "incorrect expression" {
+		errorStore.IncorrectExpressionErr = fmt.Errorf(`incorrect expression`)
 	}
 
 	correctexpression := true
@@ -377,12 +365,13 @@ func (s *TCalc) IsCorrectExpression(Expression string) (bool, error) { //Про�
 	}
 
 	if !correctexpression { //Некорректное выражение
-		 errorStore.IncorrectExpressionErr = fmt.Errorf("%s %s",  errorStore.IncorrectExpressionErr,  errorstring)
-		return false,  errorStore.IncorrectExpressionErr
+		errorStore.IncorrectExpressionErr = fmt.Errorf("%s %s", errorStore.IncorrectExpressionErr, errorstring)
+		return false, errorStore.IncorrectExpressionErr
 	}
 	return true, nil
 }
 
+/*
 func tokenizeandCalc(Expression string) (float64, error) {
 	var s TCalc
 	var d DCalc
@@ -475,6 +464,7 @@ func tokenizeandCalc(Expression string) (float64, error) {
 	}
 	return numsslice[0], nil
 }
+*/
 
 func (s *TCalc) ExprtolightExprs(Expression, exprID, atomicExprResult string) ([]Task, error) { // Функция разбивает выражение на подвыражения
 	var d DCalc
@@ -595,6 +585,7 @@ func (s TCalc) GetCalcHistory() map[time.Time]map[string]string {
 	return s.history
 }
 
+/*
 func (s TCalc) Calc(Expression string) (float64, error) {
 
 	resultmap := make(map[string]string)
@@ -616,3 +607,4 @@ func (s TCalc) Calc(Expression string) (float64, error) {
 	}
 
 }
+*/

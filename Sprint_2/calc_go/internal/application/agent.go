@@ -22,6 +22,7 @@ type AgentTask struct {
 	Arg2           float64 `json:"arg2,omitempty"`
 	Operation      string  `json:"operation,omitempty"`
 	Operation_time int     `json:"operation_time,omitempty"`
+	Result         float64 `json:"result,omitempty"`
 }
 
 type AgentResJSON struct {
