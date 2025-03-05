@@ -190,6 +190,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Ð
 
 		case errors.Is(divbyzeroeerr, errorStore.DvsByZeroErr):
 			emsg = errorStore.DvsByZeroErr.Error()
+			divbyzeroeerr = nil
 		}
 
 		w.WriteHeader(http.StatusUnprocessableEntity)
