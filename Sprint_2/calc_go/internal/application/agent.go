@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,9 +17,7 @@ import (
 type AgentTask struct {
 	ID             string  `json:"id,omitempty"`
 	ExprID         string  `json:"expression,omitempty"`
-	IDArg1         string  `json:"idarg1,omitempty"`
 	Arg1           float64 `json:"arg1,omitempty"`
-	IDArg2         string  `json:"idarg2,omitempty"`
 	Arg2           float64 `json:"arg2,omitempty"`
 	Operation      string  `json:"operation,omitempty"`
 	Operation_time int     `json:"operation_time,omitempty"`
@@ -35,7 +34,6 @@ type Agent struct {
 	OrchestratorURL string
 	client          *http.Client
 }
-
 
 func NewAgent() *Agent {
 	cp, err := strconv.Atoi(os.Getenv("COMPUTING_POWER"))
@@ -86,8 +84,13 @@ func (a *Agent) worker() {
 		task := taskResp.Task
 		log.Printf("Worker: received task %s: %f %s %f, simulating %d ms", task.ID, task.Arg1, task.Operation, task.Arg2, task.OperationTime)
 		time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
-		result, _ := calculator(task.Operation, task.Arg1, task.Arg2)
-	
+		divbyzeroeerr = nil
+		result, diverr := calculator(task.Operation, task.Arg1, task.Arg2)
+
+		if errors.Is(diverr, errorStore.DvsByZeroErr) {
+			divbyzeroeerr = errorStore.DvsByZeroErr
+		}
+
 		resultPayload := map[string]interface{}{
 			"id":     task.ID,
 			"result": result,

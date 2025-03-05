@@ -58,8 +58,8 @@ type Orchestrator struct {
 	taskStore   map[string]*Task
 	taskQueue   []*Task
 	mu          sync.Mutex
-	exprCounter int64
-	taskCounter int64
+	exprCounter int
+	taskCounter int
 }
 
 func NewOrchestrator() *Orchestrator {
@@ -99,7 +99,7 @@ type Task struct {
 
 var (
 	exprStore = make(map[string]*Expression)
-	calc TCalc
+	calc      TCalc
 )
 
 func (o *Orchestrator) Tasks(expr *Expression) {
@@ -115,7 +115,7 @@ func (o *Orchestrator) Tasks(expr *Expression) {
 		if node.Left != nil && node.Right != nil && node.Left.IsLeaf && node.Right.IsLeaf {
 			if !node.TaskScheduled {
 				o.taskCounter++
-				taskID := fmt.Sprintf("%d", o.taskCounter)
+				taskID := strconv.Itoa(o.taskCounter)
 				var opTime int
 				switch node.Operator {
 				case "+":
@@ -148,11 +148,12 @@ func (o *Orchestrator) Tasks(expr *Expression) {
 	traverse(expr.AST)
 }
 
+var divbyzeroeerr error
+
 func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //Сервер, который принимает арифметическое выражение, переводит его в набор последовательных задач и обеспечивает порядок их выполнения.
 	var (
 		emsg string
 	)
-
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -170,7 +171,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 
 	ok, err := calc.IsCorrectExpression(request.Expression) // Проверяем выражение на наличие ошибок
 
-	if !ok && err != nil { // Присваиваем ошибке статус-код, выводим их
+	if !ok && err != nil || divbyzeroeerr != nil { // Присваиваем ошибке статус-код, выводим их
 		switch {
 		case errors.Is(err, errorStore.EmptyExpressionErr):
 			emsg = errorStore.EmptyExpressionErr.Error()
@@ -187,7 +188,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 		case errors.Is(err, errorStore.NthToPopErr): // no operator to pop
 			emsg = errorStore.NthToPopErr.Error()
 
-		case errors.Is(err, errorStore.DvsByZeroErr):
+		case errors.Is(divbyzeroeerr, errorStore.DvsByZeroErr):
 			emsg = errorStore.DvsByZeroErr.Error()
 		}
 
@@ -197,7 +198,7 @@ func (o *Orchestrator) CalcHandler(w http.ResponseWriter, r *http.Request) { //�
 	}
 
 	o.exprCounter++
-	exprID := fmt.Sprintf("%d", o.exprCounter)
+	exprID := strconv.Itoa(o.exprCounter)
 
 	ast, err := ParseAST(request.Expression)
 	if err != nil {
@@ -230,7 +231,7 @@ func (o *Orchestrator) GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 	defer o.mu.Unlock()
 
 	if len(o.taskQueue) == 0 {
-		http.Error(w, `{"error":"No task available"}`, http.StatusNotFound)
+		http.Error(w, `{"Error":"No task available"}`, http.StatusNotFound)
 		return
 	}
 
@@ -312,24 +313,30 @@ func makeAnAtomicExpr(Operation string, Arg1, Arg2 float64) (string, error) {
 	return result, nil
 }
 
-func (o *Orchestrator) RunOrchestrator() error {
+func (o *Orchestrator) RunOrchestrator() {
+	a := NewAgent()
+
+	go func() {
+		for i := 0; i < a.ComputingPower; i++ {
+			a.worker()
+		}
+	}()
+
 	mux := http.NewServeMux()
+	http.Handle("/", mux)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { //можно открыть README.md
 		http.ServeFile(w, r, "..\\README.md")
 	})
-	
 	mux.HandleFunc("/api/v1/calculate", o.CalcHandler)
 	mux.HandleFunc("/api/v1/expressions", ExpressionsOutput)
 	mux.HandleFunc("/api/v1/expression/id", ExpressionByID)
-	http.Handle("/", mux)
 	mux.HandleFunc("/internal/task", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			o.GetTaskHandler(w, r)
 
 		} else if r.Method == http.MethodPost {
 			o.PostTaskHandler(w, r)
-
-		} 
+		}
 	})
 
 	go func() {
@@ -343,6 +350,6 @@ func (o *Orchestrator) RunOrchestrator() error {
 		}
 	}()
 
-	return http.ListenAndServe(":"+o.Config.Addr, nil)
+	http.ListenAndServe(":"+o.Config.Addr, nil)
 
 }

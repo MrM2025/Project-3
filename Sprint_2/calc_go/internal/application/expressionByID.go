@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"sync"
 	//"strconv"
@@ -12,7 +13,7 @@ type IDForExpression struct {
 }
 
 func ExpressionByID(w http.ResponseWriter, r *http.Request) {
-	var(
+	var (
 		mu sync.Mutex
 		//o *Orchestrator
 	)
@@ -25,7 +26,6 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 
 	expr, ok := exprStore[request.ID]
 
-
 	if !ok {
 		http.Error(w, `{"error":"Expression not found"}`, http.StatusNotFound)
 		return
@@ -33,7 +33,7 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 
 	if expr.AST != nil && expr.AST.IsLeaf {
 		expr.Status = "completed"
-		expr.Result = expr.AST.Value
+		expr.Result = math.Round(expr.AST.Value*100) / 100
 	}
 
 	w.Header().Set("Content-Type", "application/json")
