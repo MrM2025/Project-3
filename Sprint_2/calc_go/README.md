@@ -76,7 +76,7 @@ https://www.postman.com/downloads/
 ```
 curl -i -X POST -H "Content-Type:application/json" -d "{\"expression\": \"20-(9+1)\"}" http://localhost:8080/api/v1/calculate
 ```
-Ответ:
+Результат:
 {
     "expressions": [
         {
@@ -102,10 +102,18 @@ curl -i -X POST -H "Content-Type:application/json" -d "{\"expression\": \"\"}" h
 ```
 curl -i -X POST -H "Content-Type:application/json" -d "{\"expression\": \"1/0\"}" http://localhost:8080/api/v1/calculate
 ```
+Ответ: {"error":"division by zero"} 
+(Появляется после того, как Агент попытаеться вычислить выражение)
+
 Запрос неверным выражением, Status : 422, Error: invalid expression
 ```
 curl -i -X POST -H "Content-Type:application/json" -d "{\"expression\": \"1++*2\"}" http://localhost:8080/api/v1/calculate
 ```
+Ответ:
+{
+    "error":"incorrect expression | wrong sequence \"operation sign-\u003eoperation sign\": chars 1, 2 | wrong sequence \"operation sign-\u003eoperation sign\": chars 2, 3 "
+}
+
 ## Тесты
 Для тестирования перейдите в файл agent_calc_test.go и используйте команду go test или(для вывода дополнительной информации) go test -v
 
