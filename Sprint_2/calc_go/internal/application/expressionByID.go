@@ -3,8 +3,8 @@ package application
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"sync"
+	//"strconv"
 )
 
 type IDForExpression struct {
@@ -16,34 +16,26 @@ func ExpressionByID(w http.ResponseWriter, r *http.Request) {
 		mu sync.Mutex
 		//o *Orchestrator
 	)
-	
-	mu.Lock()
-	w.Header().Set("Content-Type", "application/json")
-	request := new(IDForExpression)
-	defer r.Body.Close()
-	dec := json.NewDecoder(r.Body) //Достаем выражение
-	dec.DisallowUnknownFields()
-	err := dec.Decode(&request)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	
-	ID, err := strconv.Atoi(request.ID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	
-	sID := strconv.Itoa(ID) // ID in string
 
-	if exprStore[sID] == EmptyExpression {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode("There is no such expression")
+	mu.Lock()
+	defer mu.Unlock()
+
+	request := new(IDForExpression)
+	json.NewDecoder(r.Body).Decode(&request)
+
+	expr, ok := exprStore[request.ID]
+
+
+	if !ok {
+		http.Error(w, `{"error":"Expression not found"}`, http.StatusNotFound)
 		return
-	} else {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(exprStore[sID])
 	}
-	mu.Unlock()
+
+	if expr.AST != nil && expr.AST.IsLeaf {
+		expr.Status = "completed"
+		expr.Result = expr.AST.Value
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"expression": expr})
 }

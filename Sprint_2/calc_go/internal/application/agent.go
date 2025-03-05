@@ -10,19 +10,19 @@ import (
 	"strconv"
 	"time"
 
-	//"io"
-
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
 )
 
 type AgentTask struct {
 	ID             string  `json:"id,omitempty"`
 	ExprID         string  `json:"expression,omitempty"`
+	IDArg1         string  `json:"idarg1,omitempty"`
 	Arg1           float64 `json:"arg1,omitempty"`
+	IDArg2         string  `json:"idarg2,omitempty"`
 	Arg2           float64 `json:"arg2,omitempty"`
 	Operation      string  `json:"operation,omitempty"`
 	Operation_time int     `json:"operation_time,omitempty"`
-	Result         float64 `json:"result,omitempty"`
+	Result         string  `json:"result,omitempty"`
 }
 
 type AgentResJSON struct {
@@ -36,86 +36,72 @@ type Agent struct {
 	client          *http.Client
 }
 
+
 func NewAgent() *Agent {
+	cp, err := strconv.Atoi(os.Getenv("COMPUTING_POWER"))
+	if err != nil || cp < 1 {
+		cp = 1
+	}
 
 	orchestratorURL := os.Getenv("ORCHESTRATOR_URL")
+
 	if orchestratorURL == "" {
 		orchestratorURL = "http://localhost:8080"
 	}
-
 	return &Agent{
-		ComputingPower:  1,
+		ComputingPower:  cp,
 		OrchestratorURL: orchestratorURL,
-		client: &http.Client{ // Инициализация клиента
-			Timeout: 10 * time.Second,
-		},
 	}
 }
 
 func (a *Agent) worker() {
-	if a.client == nil {
-		log.Fatal("HTTP client is not initialized")
-	}
 	for {
-		log.Println(3)
-		req, err := http.NewRequest("GET", a.OrchestratorURL+"/internal/task", nil)
+		resp, err := http.Get(a.OrchestratorURL + "/internal/task")
 		if err != nil {
-			log.Printf("Error creating request: %v", err)
+			log.Printf("Worker %d: error getting task: %v", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
-
-		res, err := a.client.Do(req)
+		if resp.StatusCode == http.StatusNotFound {
+			resp.Body.Close()
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		var taskResp struct {
+			Task struct {
+				ID            string  `json:"id"`
+				Arg1          float64 `json:"arg1"`
+				Arg2          float64 `json:"arg2"`
+				Operation     string  `json:"operation"`
+				OperationTime int     `json:"operation_time"`
+			} `json:"task"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&taskResp)
+		resp.Body.Close()
 		if err != nil {
-			log.Printf("Error doing request: %v. Retrying in 2 seconds...", err)
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		log.Println(4)
-
-		request := new(AgentTask)
-		dec := json.NewDecoder(res.Body) //Достаем подвыражение из res
-		dec.DisallowUnknownFields()
-		derr := dec.Decode(&request)
-		if derr != nil {
-			log.Printf("Error decoding task: %v.", derr)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		res.Body.Close()
-
-		//log.Println("a", request.Arg1, request.Arg2)
-
-		calcresult, cerr := calculator(request.Operation, request.Arg1, request.Arg2, request.Operation_time) //Производим вычисления
-		if cerr != nil {
-			log.Printf("Calculator error: %v.", cerr)
-			return
+		task := taskResp.Task
+		log.Printf("Worker: received task %s: %f %s %f, simulating %d ms", task.ID, task.Arg1, task.Operation, task.Arg2, task.OperationTime)
+		time.Sleep(time.Duration(task.OperationTime) * time.Millisecond)
+		result, _ := calculator(task.Operation, task.Arg1, task.Arg2)
+	
+		resultPayload := map[string]interface{}{
+			"id":     task.ID,
+			"result": result,
 		}
 
-		result := AgentResJSON{
-			ID:     request.ID,
-			Result: calcresult,
-		}
+		payloadBytes, _ := json.Marshal(resultPayload)
+		respPost, err := http.Post(a.OrchestratorURL+"/internal/task", "application/json", bytes.NewReader(payloadBytes))
+		respPost.Body.Close()
 
-		body, err := json.Marshal(result)
-		if err != nil {
-			log.Printf("Error marshaling result: %v.", err)
-			return
-		}
-		log.Println(4)
-
-		a.SendResult(request, body)
-
-		time.Sleep(3 * time.Second)
 	}
 }
 
-func calculator(operator string, arg1, arg2 float64, operation_time int) (float64, error) {
-	time.Sleep(time.Duration(operation_time) * time.Millisecond)
+func calculator(operator string, arg1, arg2 float64) (float64, error) {
 	var result float64
-
-	log.Println("c", operator, arg1, arg2)
 
 	switch {
 	case operator == "+":
@@ -156,12 +142,12 @@ func (a *Agent) SendResult(request *AgentTask, result []byte) {
 
 	}
 	/*
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(res.Body)
-		log.Printf("Worker : error response posting result for task %v: %s", taskStore[ID-1], string(body))
-	} else {
-		log.Printf("Worker : successfully completed task %v with result %s", taskStore[ID-1], result)
-	}
+		if res.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(res.Body)
+			log.Printf("Worker : error response posting result for task %v: %s", taskStore[ID-1], string(body))
+		} else {
+			log.Printf("Worker : successfully completed task %v with result %s", taskStore[ID-1], result)
+		}
 	*/
 
 	defer req.Body.Close()
@@ -169,10 +155,9 @@ func (a *Agent) SendResult(request *AgentTask, result []byte) {
 }
 
 func (a *Agent) RunAgent() {
-
-	computingPower, _ := strconv.Atoi(os.Getenv("COMPUTING_POWER"))
-	for i := 0; i < computingPower; i++ {
+	for i := 0; i < a.ComputingPower; i++ {
 		log.Printf("Starting worker %d", i)
 		go a.worker()
 	}
+	select {}
 }

@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-var EmptyExpression = Expression{
+var EmptyExpression = &Expression{
 	Status: "",
 }
 
@@ -21,11 +21,15 @@ func ExpressionsOutput(w http.ResponseWriter, r *http.Request) { //Сервер,
 
 	w.Header().Set("Content-Type", "application/json")
 	
-	if exprStore == nil {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(exprStore)
-		return
+	exprs := make([]*Expression, 0, len(exprStore))
+
+	for _, expr := range exprStore {
+		if expr.AST != nil && expr.AST.IsLeaf {
+			expr.Status = "completed"
+			expr.Result = expr.AST.Value
+		}
+		exprs = append(exprs, expr)
 	}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(exprStore)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"expressions": exprs})
 }

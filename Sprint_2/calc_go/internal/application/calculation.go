@@ -3,10 +3,8 @@ package application
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
-	"log"
 
 	"github.com/MrM2025/rpforcalc/tree/master/calc_go/pkg/errorStore"
 )
@@ -162,83 +160,25 @@ func popOp(opslice []int) (int, []int, error) {
 	return poppedop, newopslice, nil
 }
 
-func (s *TCalc) GetLightExpressions(total []Task, exprID string, sliceofnums []float64, opslice []int, prioritynum int, operator int, addop bool) (Task, []float64, []int, error) {
+/*
+func (s *TCalc) GetLightExpression(taskStore []Task, exprID string, sliceofnums []float64, opslice []int, prioritynum int, operator int, addop bool) (Task, []float64, []int, error) {
 	var (
 		poppedop            int
 		poppednums          []float64
 		popnumerr, popoperr error
 		lightexpr           Task
 	)
-	log.Println(sliceofnums)
-	log.Println(total)
+	//log.Println("nums", sliceofnums)
+	//log.Println("operators", opslice)
+	log.Println("tasks", taskStore)
 
-	if len(sliceofnums) == 1 && len(total) > 2 {
-		time.Sleep(3 * time.Second)
-		if total[(prioritynum*-1)-1].Result == "" {
+	switch {
+	case len(taskStore) == 0:
 
-			ID := strconv.Itoa(prioritynum * -1)
-			argID := strconv.Itoa(prioritynum*-1 - 1)
-
-			poppedop, _, popoperr = popOp(opslice)
-			poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 1)
-
-			if poppedop == 0 && popoperr != nil {
-				return Task{}, sliceofnums, opslice, popoperr
-			}
-			if poppednums == nil && popnumerr != nil {
-				return Task{}, sliceofnums, opslice, popnumerr
-			}
-
-			switch {
-			case poppedop == isAddition:
-
-				lightexpr = Task{
-					ID:             ID,
-					ExprID:         exprID,
-					IDArg1:         argID,
-					Arg2:           poppednums[0],
-					Operation:      "+",
-					Operation_time: ConfigFromEnv().TimeAddition,
-				}
-
-			case poppedop == isSubtraction:
-				lightexpr = Task{
-					ID:             ID,
-					ExprID:         exprID,
-					IDArg1:         argID,
-					Arg2:           poppednums[0],
-					Operation:      "-",
-					Operation_time: ConfigFromEnv().TimeSubtraction,
-				}
-			case poppedop == isMultiplication:
-				lightexpr = Task{
-					ID:             ID,
-					ExprID:         exprID,
-					IDArg1:         argID,
-					Arg2:           poppednums[0],
-					Operation:      "*",
-					Operation_time: ConfigFromEnv().TimeMultiplications,
-				}
-
-			case poppedop == isDivision:
-				if sliceofnums[0] == 0 {
-					return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
-				}
-				lightexpr = Task{
-					ID:             ID,
-					ExprID:         exprID,
-					IDArg1:         argID,
-					Arg2:           poppednums[0],
-					Operation:      "/",
-					Operation_time: ConfigFromEnv().TimeDivisions,
-				}
-				return lightexpr, sliceofnums, opslice, nil
-			}
-		}
-
-	} else {
 		poppedop, opslice, popoperr = popOp(opslice)
 		poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
+
+		log.Println(3.3, opslice, poppedop)
 
 		if poppedop == 0 && popoperr != nil {
 			return Task{}, sliceofnums, opslice, popoperr
@@ -248,7 +188,7 @@ func (s *TCalc) GetLightExpressions(total []Task, exprID string, sliceofnums []f
 			return Task{}, sliceofnums, opslice, popnumerr
 		}
 
-		ID := strconv.Itoa(prioritynum * -1) // prioritynum * -1 ???
+		ID := strconv.Itoa(prioritynum) // prioritynum * -1 ???
 
 		switch {
 		case poppedop == isAddition:
@@ -297,13 +237,282 @@ func (s *TCalc) GetLightExpressions(total []Task, exprID string, sliceofnums []f
 			//sliceofnums = append(sliceofnums, resultOfTask)
 		}
 
+		// Operator --> {  0 0 0}  {  20 20 0} вместо нуля нужен оператор
+		if addop {
+			opslice = append(opslice, operator)
+		}
+	default:
+		if taskStore[prioritynum-1].Result == "" {
+			ID := strconv.Itoa(prioritynum)
+			arg1ID := strconv.Itoa(prioritynum - 1)
+
+			poppedop, opslice, popoperr = popOp(opslice)
+			poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 1)
+
+			if poppedop == 0 && popoperr != nil {
+				return Task{}, sliceofnums, opslice, popoperr
+			}
+			if poppednums == nil && popnumerr != nil {
+				return Task{}, sliceofnums, opslice, popnumerr
+			}
+
+			switch {
+			case poppedop == isAddition:
+
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "+",
+					Operation_time: ConfigFromEnv().TimeAddition,
+				}
+
+			case poppedop == isSubtraction:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "-",
+					Operation_time: ConfigFromEnv().TimeSubtraction,
+				}
+			case poppedop == isMultiplication:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "*",
+					Operation_time: ConfigFromEnv().TimeMultiplications,
+				}
+
+			case poppedop == isDivision:
+				if poppednums[0] == 0 {
+					return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
+				}
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "/",
+					Operation_time: ConfigFromEnv().TimeDivisions,
+				}
+				return lightexpr, sliceofnums, opslice, nil
+			}
+		}
 		if addop {
 			opslice = append(opslice, operator)
 		}
 	}
+
+	/*switch {
+	case len(sliceofnums) == 1 && len(total) > 0:
+		if total[prioritynum-1].Result == "" {
+			ID := strconv.Itoa(prioritynum)
+			arg1ID := strconv.Itoa(prioritynum - 1)
+
+			poppedop, opslice, popoperr = popOp(opslice)
+			poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 1)
+
+			if poppedop == 0 && popoperr != nil {
+				return Task{}, sliceofnums, opslice, popoperr
+			}
+			if poppednums == nil && popnumerr != nil {
+				return Task{}, sliceofnums, opslice, popnumerr
+			}
+
+			switch {
+			case poppedop == isAddition:
+
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "+",
+					Operation_time: ConfigFromEnv().TimeAddition,
+				}
+
+			case poppedop == isSubtraction:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "-",
+					Operation_time: ConfigFromEnv().TimeSubtraction,
+				}
+			case poppedop == isMultiplication:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "*",
+					Operation_time: ConfigFromEnv().TimeMultiplications,
+				}
+
+			case poppedop == isDivision:
+				if poppednums[0] == 0 {
+					return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
+				}
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					Arg2:           poppednums[0],
+					Operation:      "/",
+					Operation_time: ConfigFromEnv().TimeDivisions,
+				}
+				return lightexpr, sliceofnums, opslice, nil
+			}
+		}
+		if addop {
+			opslice = append(opslice, operator)
+		}
+
+	case len(sliceofnums) == 0 && len(total) > 1:
+		if total[prioritynum-1].Result == "" {
+
+			ID := strconv.Itoa(prioritynum)
+			arg1ID := strconv.Itoa(prioritynum - 1)
+			arg2ID := strconv.Itoa(prioritynum - 2)
+
+			poppedop, opslice, popoperr = popOp(opslice)
+
+			if poppedop == 0 && popoperr != nil {
+				return Task{}, sliceofnums, opslice, popoperr
+			}
+
+			switch {
+			case poppedop == isAddition:
+
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					IDArg2:         arg2ID,
+					Operation:      "+",
+					Operation_time: ConfigFromEnv().TimeAddition,
+				}
+
+			case poppedop == isSubtraction:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					IDArg2:         arg2ID,
+					Operation:      "-",
+					Operation_time: ConfigFromEnv().TimeSubtraction,
+				}
+			case poppedop == isMultiplication:
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					IDArg2:         arg2ID,
+					Operation:      "*",
+					Operation_time: ConfigFromEnv().TimeMultiplications,
+				}
+
+			case poppedop == isDivision:
+				if sliceofnums[0] == 0 {
+					return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
+				}
+				lightexpr = Task{
+					ID:             ID,
+					ExprID:         exprID,
+					IDArg1:         arg1ID,
+					IDArg2:         arg2ID,
+					Operation:      "/",
+					Operation_time: ConfigFromEnv().TimeDivisions,
+				}
+				return lightexpr, sliceofnums, opslice, nil
+			}
+
+		}
+		if addop {
+			opslice = append(opslice, operator)
+		}
+	default:
+
+		log.Println(3, "operators", opslice)
+
+		poppedop, opslice, popoperr = popOp(opslice)
+		poppednums, sliceofnums, popnumerr = popNum(sliceofnums, 2)
+
+		log.Println(3.3, opslice, poppedop)
+
+
+		if poppedop == 0 && popoperr != nil {
+			return Task{}, sliceofnums, opslice, popoperr
+
+		}
+		if poppednums == nil && popnumerr != nil {
+			return Task{}, sliceofnums, opslice, popnumerr
+		}
+
+		ID := strconv.Itoa(prioritynum) // prioritynum * -1 ???
+
+		switch {
+		case poppedop == isAddition:
+
+			lightexpr = Task{
+				ID:             ID,
+				ExprID:         exprID,
+				Arg1:           poppednums[0],
+				Arg2:           poppednums[1],
+				Operation:      "+",
+				Operation_time: ConfigFromEnv().TimeAddition,
+			}
+
+		case poppedop == isSubtraction:
+			lightexpr = Task{
+				ID:             ID,
+				ExprID:         exprID,
+				Arg1:           poppednums[0],
+				Arg2:           poppednums[1],
+				Operation:      "-",
+				Operation_time: ConfigFromEnv().TimeSubtraction,
+			}
+		case poppedop == isMultiplication:
+			lightexpr = Task{
+				ID:             ID,
+				ExprID:         exprID,
+				Arg1:           poppednums[0],
+				Arg2:           poppednums[1],
+				Operation:      "*",
+				Operation_time: ConfigFromEnv().TimeMultiplications,
+			}
+
+		case poppedop == isDivision:
+			if poppednums[1] == 0 {
+				return Task{}, sliceofnums, opslice, errorStore.DvsByZeroErr //DvsByZeroErr
+			}
+			lightexpr = Task{
+				ID:             ID,
+				ExprID:         exprID,
+				Arg1:           poppednums[0],
+				Arg2:           poppednums[1],
+				Operation:      "/",
+				Operation_time: ConfigFromEnv().TimeDivisions,
+			}
+
+			//sliceofnums = append(sliceofnums, resultOfTask)
+		}
+
+		// Operator --> {  0 0 0}  {  20 20 0} вместо нуля нужен оператор
+		if addop {
+			opslice = append(opslice, operator)
+		}
+
+	}
+	
 	return lightexpr, sliceofnums, opslice, nil
 }
-
+*/
 func transact(sliceofnums []float64, opslice []int, operator int, addop bool) (float64, []float64, []int, error) {
 	var result float64
 	var poppedop int
@@ -541,15 +750,15 @@ func tokenizeandCalc(Expression string) (float64, error) {
 }
 */
 
+/*
 func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { // Функция разбивает выражение на подвыражения
 	var d DCalc
-	var exprpryority int = 1
+	var exprpryority int
 	var result Task
 	var operatorsslice []int
 	var numsslice []float64
 	var priority, countdown int
 	var matherr, numconverr error
-	var total []Task
 
 	Expression = strings.ReplaceAll(Expression, " ", "")
 
@@ -583,9 +792,16 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { //
 				if operatorslicelength-1 >= 0 {
 					priority = getPryority(d.IsOperator(Expression[indexoftokenizer]))
 					if getPryority(operatorsslice[operatorslicelength-1]) == priority {
-						exprpryority--
-						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(total, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
-						total = append(total, result)
+						result, numsslice, operatorsslice, matherr = s.GetLightExpression(taskStore, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
+						taskStore = append(taskStore, result)
+						for taskStore[exprpryority].Result == "" {
+						}
+						res, cerr := strconv.ParseFloat(taskStore[exprpryority].Result, 32)
+						if cerr != nil {
+							log.Printf("Error of type conversion the result of a task %v", cerr)
+						}
+						numsslice = append(numsslice, res)
+						exprpryority++
 						if matherr != nil {
 							return nil, matherr
 
@@ -593,9 +809,16 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { //
 					} else if getPryority(operatorsslice[operatorslicelength-1]) < priority {
 						operatorsslice = append(operatorsslice, d.IsOperator(Expression[indexoftokenizer]))
 					} else if getPryority(operatorsslice[operatorslicelength-1]) > priority {
-						exprpryority--
-						result, numsslice, operatorsslice, matherr = s.GetLightExpressions(total, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
-						total = append(total, result)
+						result, numsslice, operatorsslice, matherr = s.GetLightExpression(taskStore, exprID, numsslice, operatorsslice, exprpryority, d.IsOperator(Expression[indexoftokenizer]), true)
+						taskStore = append(taskStore, result)
+						for taskStore[exprpryority].Result == "" {
+						}
+						res, cerr := strconv.ParseFloat(taskStore[exprpryority].Result, 32)
+						if cerr != nil {
+							log.Printf("Error of type conversion the result of a task %v", cerr)
+						}
+						numsslice = append(numsslice, res)
+						exprpryority++
 						if matherr != nil {
 							return nil, matherr
 
@@ -613,9 +836,16 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { //
 						_, operatorsslice, _ = popOp(operatorsslice)
 						break
 					}
-					exprpryority--
-					result, numsslice, operatorsslice, matherr = s.GetLightExpressions(total, exprID, numsslice, operatorsslice, exprpryority, 0, false)
-					total = append(total, result)
+					result, numsslice, operatorsslice, matherr = s.GetLightExpression(taskStore, exprID, numsslice, operatorsslice, exprpryority, 0, false)
+					taskStore = append(taskStore, result)
+					for taskStore[exprpryority].Result == "" {
+					}
+					res, cerr := strconv.ParseFloat(taskStore[exprpryority].Result, 32)
+					if cerr != nil {
+						log.Printf("Error of type conversion the result of a task %v", cerr)
+					}
+					numsslice = append(numsslice, res)
+					exprpryority++
 					if matherr != nil {
 						return nil, matherr
 
@@ -630,9 +860,16 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { //
 		if countdown < 0 {
 			break
 		} else {
-			result, numsslice, operatorsslice, matherr = s.GetLightExpressions(total, exprID, numsslice, operatorsslice, exprpryority, 0, false)
-			exprpryority--
-			total = append(total, result)
+			result, numsslice, operatorsslice, matherr = s.GetLightExpression(taskStore, exprID, numsslice, operatorsslice, exprpryority, 0, false)
+			taskStore = append(taskStore, result)
+			for taskStore[exprpryority].Result == "" {
+			}
+			res, cerr := strconv.ParseFloat(taskStore[exprpryority].Result, 32)
+			if cerr != nil {
+				log.Printf("Error of type conversion the result of a task %v", cerr)
+			}
+			numsslice = append(numsslice, res)
+			exprpryority++
 			if matherr != nil {
 				return nil, matherr
 
@@ -640,8 +877,9 @@ func (s *TCalc) ExprtolightExprs(Expression, exprID string) ([]Task, error) { //
 		}
 		countdown--
 	}
-	return total, nil
+	return taskStore, nil
 }
+*/
 
 func (s TCalc) Init() TCalc {
 	s.history = make(map[time.Time]map[string]string)
